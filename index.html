@@ -1,0 +1,174 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP32 LED Control</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: #101827;
+      color: white;
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .card {
+      background: #1b2639;
+      padding: 30px;
+      border-radius: 18px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      border: 1px solid #34435a;
+    }
+
+    h1 { font-size: 25px; }
+
+    .bulb {
+      font-size: 65px;
+      margin: 20px;
+      filter: grayscale(1);
+    }
+
+    .bulb.on {
+      filter: none;
+      text-shadow: 0 0 25px #ffdd55;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    button:disabled { opacity: .5; }
+    .on-btn { background: #16a34a; }
+    .off-btn { background: #dc2626; }
+
+    #status {
+      margin-top: 22px;
+      font-size: 18px;
+      font-weight: bold;
+      overflow-wrap: anywhere;
+    }
+
+    #details {
+      color: #b4c0d0;
+      font-size: 13px;
+      line-height: 1.6;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="card">
+    <h1>ESP32 LED Control</h1>
+    <p>ThingSpeak IoT Controller</p>
+
+    <div id="bulb" class="bulb">💡</div>
+
+    <button class="on-btn" id="onBtn" onclick="controlLED(1)">
+      LED ON
+    </button>
+
+    <button class="off-btn" id="offBtn" onclick="controlLED(0)">
+      LED OFF
+    </button>
+
+    <div id="status">Ready</div>
+    <div id="details">Waiting for your command.</div>
+  </main>
+
+  <script>
+    // IMPORTANT: Replace this with your ThingSpeak WRITE API KEY.
+    const WRITE_API_KEY = "1TC1R46OFITP010D";
+
+    // Official ThingSpeak update endpoint
+    const THINGSPEAK_URL = "https://api.thingspeak.com/update";
+
+    async function controlLED(value) {
+      const status = document.getElementById("status");
+      const details = document.getElementById("details");
+      const bulb = document.getElementById("bulb");
+      const buttons = [
+        document.getElementById("onBtn"),
+        document.getElementById("offBtn")
+      ];
+
+      if (
+        !WRITE_API_KEY ||
+        WRITE_API_KEY === "YOUR_WRITE_API_KEY"
+      ) {
+        status.textContent = "API key missing";
+        status.style.color = "#fbbf24";
+        details.textContent =
+          "Enter your ThingSpeak channel Write API Key in the code.";
+        return;
+      }
+
+      buttons.forEach(button => button.disabled = true);
+      status.textContent = "Sending command...";
+      status.style.color = "#fbbf24";
+      details.textContent = "Connecting to ThingSpeak...";
+
+      try {
+        const url = new URL(THINGSPEAK_URL);
+        url.searchParams.set("api_key", WRITE_API_KEY);
+        url.searchParams.set("field1", String(value));
+
+        const response = await fetch(url.href, {
+          method: "GET",
+          cache: "no-store"
+        });
+
+        const result = (await response.text()).trim();
+
+        if (!response.ok) {
+          throw new Error(
+            `HTTP ${response.status}: ${response.statusText}. Check the request URL.`
+          );
+        }
+
+        if (!/^[1-9]\d*$/.test(result)) {
+          throw new Error(
+            `ThingSpeak returned "${result || "empty response"}". Check your Write API Key, channel settings, and update rate limit.`
+          );
+        }
+
+        status.textContent =
+          value === 1 ? "ON command sent" : "OFF command sent";
+        status.style.color = value === 1 ? "#4ade80" : "#fb7185";
+
+        details.textContent =
+          `ThingSpeak entry ID: ${result}. ` +
+          "Your ESP32 must read Field 1 to apply this command.";
+
+        bulb.classList.toggle("on", value === 1);
+
+      } catch (error) {
+        status.textContent = "Request failed";
+        status.style.color = "#fb7185";
+        details.textContent = error.message;
+        console.error("ThingSpeak error:", error);
+      } finally {
+        buttons.forEach(button => button.disabled = false);
+      }
+    }
+  </script>
+</body>
+</html>
